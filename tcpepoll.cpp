@@ -9,7 +9,7 @@
 #include <arpa/inet.h>
 #include <sys/fcntl.h>
 #include <sys/epoll.h>
-#include <netinet/tcp.h>      // TCP_NODELAY需要包含这个头文件。
+#include <netinet/tcp.h>      // TCP_NODELAY需要包含这个头文件
 
 #include"InetAddress.h"
 // #include"Socket.h"
@@ -17,11 +17,12 @@
 // #include"Channel.h"
 // #include"EventLoop.h"
 #include"TcpServer.h"
+#include"EchoServer.h"
 using namespace std;
-// 设置非阻塞的IO。
+// 设置非阻塞的IO
 // void setnonblocking(int fd)
 // {
-//     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+//     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK).
 // }
 
 int main(int argc,char *argv[])
@@ -29,14 +30,15 @@ int main(int argc,char *argv[])
     if (argc != 3) 
     { 
         printf("usage: ./tcpepoll ip port\n"); 
-        printf("example: ./tcpepoll 192.168.240.139 5085\n\n"); 
-        return -1; 
+        printf("example: ./tcpepoll 192.168.201.128 5085\n\n");
+        return -1;
     }
    
   
  
 
-  TcpServer tcpserver(argv[1],atoi(argv[2]));
-  tcpserver.start();
+ 
+  EchoServer echoserver(argv[1],atoi(argv[2]),3,2);
+  echoserver.Start();
   return 0;
 }

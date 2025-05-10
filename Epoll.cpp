@@ -17,6 +17,7 @@ Epoll::Epoll(){
     {
         printf("epoll_create() failed(%d).\n",errno); exit(-1);
     }
+    
 
 }
 Epoll::~Epoll(){
@@ -37,8 +38,6 @@ void Epoll::updatechannel(Channel*ch){
     ev.events=ch->events();
     if (ch->inpoll())         // 如果channel已经在树上了。
     {
-
-
     if (epoll_ctl(epollfd_,EPOLL_CTL_MOD,ch->fd(),&ev)==-1)     // 把需要监视的fd和它的事件加入epollfd中。
     {
         printf("epoll_ctl()mod failed(%d).\n",errno); exit(-1);
@@ -52,6 +51,7 @@ void Epoll::updatechannel(Channel*ch){
     {
         printf("epoll_ctl()add failed(%d).\n",errno); exit(-1);
     }
+    ch->setinepoll();
 
 
     }

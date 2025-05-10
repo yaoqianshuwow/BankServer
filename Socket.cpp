@@ -79,8 +79,7 @@ void Socket::setkeepalive(bool on)
 
 void Socket::bind(const InetAddress&servaddr){
    ::bind(fd_,servaddr.addr(),sizeof(sockaddr));
-   ip_=servaddr.ip();
-   port_=servaddr.port();
+   setipport(servaddr.ip(),servaddr.port());
 }
 void Socket::listen(int nn){
     ::listen(fd_,nn) != 0 ;
@@ -88,8 +87,7 @@ void Socket::listen(int nn){
 int  Socket::accept(InetAddress& clientaddr){
     socklen_t len=sizeof(clientaddr);
    return accept4(fd_,(sockaddr*)&clientaddr,&len,SOCK_NONBLOCK);
-   ip_=clientaddr.ip();
-   port_=clientaddr.port();
+
 
 }
 
@@ -100,4 +98,10 @@ string Socket:: ip()const{
 uint16_t Socket::port()const{
 
     return port_;
+}
+void Socket::setipport(const string&ip,const uint16_t &port){
+
+
+    ip_=ip;
+    port_=port;
 }

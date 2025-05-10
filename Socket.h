@@ -35,4 +35,5 @@ public:
 
     string ip()const;
     uint16_t port()const;
+    void setipport(const string&ip,const uint16_t &port);
 };

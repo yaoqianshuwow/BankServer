@@ -66,12 +66,29 @@ bool send(const string& data){
     return true;
 
 }
-bool recv( string &data,const size_t maxlen){
+bool send(int len,const string& data){
+  int iret;
+  char data_[1024];
+  memset(data_,0,sizeof(data_));
+  memcpy(data_,&len,4);
+  memcpy(data_+4,data.data(),len);
+  //cout<<data_+4<<len<<endl;
+  if((iret=::send(sockfd,data_,len+4,0))<=0){
+    //cout<<"shibai"<<endl;
+    perror("send");
+    return false;
+    }
+  //cout<<"发送成功"<<endl;
+  return true;
+
+}
+ssize_t recv( string &data,const size_t maxlen){
   data.clear();         // 清空容器。
   data.resize(maxlen);  // 设置容器的大小为maxlen。
-  int iret;
-  if((iret=::recv(sockfd,&data[0],sizeof(data),1024)<=0))return false;
-  return true;
+  ssize_t iret;
+  iret=::recv(sockfd,&data[0],maxlen, 0);
+  //cout<<iret<<endl;
+  return iret;
 }
 
 void close()
@@ -83,16 +100,34 @@ sockfd=-1;
 ~ClientSocket(){
   close();
 }
+int getfd(){
+
+  return sockfd;
+}
 };
 
- 
+void divistr(string &buffer){
+while (1)
+{
+  if(buffer.size()<4)break;
+  int len;
+  memcpy(&len,buffer.data(),4);
+  if(buffer.size()<len+4)break;
+  string str(buffer.data()+4,len);
+  cout<<"回应报文"<<str;
+  //sleep(1);
+  buffer.erase(0,len+4);
+
+}
+//cout<<buffer.size();
+}
 int main(int argc,char *argv[])
 {  
 
  
   if (argc!=3)
   {
-    cout << "Using:./client 服务端的IP 服务端的端口\nExample:./client 192.168.240.139 5085\n\n"; 
+    cout << "Using:./client 服务端的IP 服务端的端口\nExample:./client 192.168.201.128 5085\n\n"; 
     return -1;
   }
 
@@ -103,31 +138,47 @@ int main(int argc,char *argv[])
   //cout<<"拜拜"<<endl;
   return 0;
   }
+  
   char buff[1024];
-//cout<<"1eionq12iodenq2io"<<endl;
-//   sleep(10);
 
-  // return 0;
 
-  for(int i=1;i<=10;i++){
+  for(int i=0;i<=80;i++){
 
   memset(buff,0,sizeof(buff));
-  printf("请输入发送内容 : ") ;
-  cin>>buff;
   
-  if(!cs.send(buff)){cout<<"发送失败"<<endl;
-  return 0;}
-  cout<<"客户端:"<<buff<<endl;
+  sprintf(buff,"数据测试进行时%d\n",i);
+
+  int len=strlen(buff);
+  
+  
+ 
+  //cout<<len<<endl;
+ 
+   if(!cs.send(len,buff)){
+    cout<<"发送失败"<<endl;
+   return 0;}
 
 
-  string str;
-  if(!cs.recv(str,1024)){
-    cout<<"接收失败"<<endl;
-  return 0;
   }
-  cout<<"服务端："<<str<<endl;
-   
+ 
+  for(int i=1;i<=100;i++){
+    string buffer;
+    string str;
+    ssize_t size;
+    size=cs.recv(str,1024);
+    
+    
+
+  
+    
+    buffer.append(str.data(),size);
+    divistr(buffer);
+    
   }
+    //divistr(buffer);
+
+  sleep(5);
+  
   cs.close();
   return 0;
 

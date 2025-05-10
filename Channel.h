@@ -20,6 +20,9 @@ private:
     uint32_t revents_=0;             // fd_已发生的事件。 
     bool islisten_=false;
     std::function<void()>readcallback_;         // fd_读事件的回调函数。
+    std::function<void()>writecallback_;
+    std::function<void()>closecallback_;
+    std::function<void()>errorcallback_;
     EventLoop*loop_=nullptr;
 
 public:
@@ -29,6 +32,10 @@ public:
     int fd();                                            // 返回fd_成员。
     void useet();                                    // 采用边缘触发。
     void enablereading();                     // 让epoll_wait()监视fd_的读事件。
+    void disablereading();                    // 取消读事件。
+    void enablewriting();                      // 注册写事件。
+    void disablewriting();                     // 取消写事件。
+
     void setinepoll();;                           // 把inepoll_成员的值设置为true。
     void setrevents(uint32_t ev);         // 设置revents_成员的值为参数ev。
     bool inpoll();                                  // 返回inepoll_成员。
@@ -38,6 +45,9 @@ public:
 
 
     
-    void onmessage();                                     // 处理对端发送过来的消息。
+    //void onmessage();                                     // 处理对端发送过来的消息。
     void setreadcallback(std::function<void()> fn);    // 设置fd_读事件的回调函数。
+    void setwritecallback(std::function<void()> fn);
+    void setclosecallback(std::function<void()>fn);
+    void seterrorcallback(std::function<void()>fn);
 };
