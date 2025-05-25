@@ -12,14 +12,14 @@
 
 //     void updatechannel(Channel *ch);                        // 把channel添加/更新到红黑树上，channel中有fd，也有需要监视的事件。
 // };
-EventLoop::EventLoop():ep_(new Epoll),wakefd_(eventfd(0,EFD_NONBLOCK)),wakechannel_(new Channel(this,wakefd_)){
+EventLoop::EventLoop():ep_(new Epoll),wakefd_(eventfd(0,EFD_NONBLOCK)),wakechannel_(new Channel(this,wakefd_)),mainloop_(false){
 
 //wakechannel_->useet();                 // 客户端连上来的fd采用边缘触发。
     
 
 wakechannel_->setreadcallback(bind(&EventLoop::handlewakeup,this));
 wakechannel_->enablereading();   // 让epoll_wait()监视clientchannel的读事件
-wakeup();
+//wakeup();
 }
 EventLoop::~EventLoop(){
 
@@ -90,6 +90,7 @@ void EventLoop::handlewakeup(){
         fn();
        
         loopque_.erase(it);
+        
         std::cout << "Task executed, remaining queue size: " << loopque_.size() << std::endl;
     
     }
@@ -97,4 +98,52 @@ void EventLoop::handlewakeup(){
 }
 
 
+void EventLoop::settimeout(bool mainloop,int sec){
 
+    mainloop_=mainloop;
+    
+    if(mainloop_)return;
+    //else cout<<"subloop定时器"<<endl;
+    timefd=timerfd_create(CLOCK_MONOTONIC,TFD_CLOEXEC|TFD_NONBLOCK);
+    struct itimerspec timeout;
+
+    memset(&timeout,0,sizeof(itimerspec));
+
+    timeout.it_value.tv_sec=5;
+    timeout.it_value.tv_nsec=0;
+
+    timeout.it_interval.tv_sec = 5;
+    timerfd_settime(timefd,0,&timeout,0);
+    timechannel_=new Channel(this,timefd);
+    timechannel_->setreadcallback(bind(&EventLoop::handletimeout,this,sec));
+    timechannel_->enablereading();
+}
+void EventLoop::handletimeout(int sec){
+    uint64_t expirations;
+   read(timefd, &expirations, sizeof(expirations));
+    if(!mainloop_){
+
+   for(auto  it:conns){
+
+    cout<<it.first<<" ";
+    if(Timestamp::now().toint()-it.second->laststamp()>=sec){
+        conns.erase(it.first);
+        timeoutcb_(it.second);
+    }
+   }
+   cout<<endl;
+
+
+    }
+    
+
+}
+void EventLoop::newconnewcton(int fd,spConnection conn){
+
+
+  conns[fd]=conn;
+ }
+void EventLoop::settimeout(function<void(spConnection)>fn){
+
+    timeoutcb_=fn;
+}

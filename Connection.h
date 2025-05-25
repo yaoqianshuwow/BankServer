@@ -6,9 +6,11 @@
 #include "EventLoop.h"
 #include"Buffer.h"
 #include<memory>
+#include"Timestamp.h"
 class Connection;
+class EventLoop;
+class Channel;
 using spConnection=std::shared_ptr<Connection>;
-
 class Connection:public std::enable_shared_from_this<Connection>
 {
 private:
@@ -22,8 +24,9 @@ private:
     Buffer inputbuffer_;
     Buffer outputbuffer_;
     //shared_ptr<Connection>shared_from_this;
+    Timestamp ts;
 public:
-    Connection(EventLoop *loop,Socket *clientsock);
+    Connection(EventLoop*loop,Socket *clientsock);
     ~Connection();
     string ip()const;
     uint16_t port()const;
@@ -33,8 +36,9 @@ public:
     void writecallback(); 
     void setclosecallback(std::function<void(spConnection)>fn);
     void seterrorcallback(std::function<void(spConnection)>fn);
-    void setonmessagecallback( std::function<void(spConnection,string )>fn);
+    void setonmessagecallback(std::function<void(spConnection,string )>fn);
     void onmessage();
     void send(const char *data,size_t size);
     void sendinloop(const char *data,size_t size);
+    int laststamp();
 };

@@ -9,7 +9,7 @@
 #include <arpa/inet.h>
 #include <sys/fcntl.h>
 #include <sys/epoll.h>
-#include <netinet/tcp.h>      // TCP_NODELAY需要包含这个头文件
+#include <netinet/tcp.h>      // TCP_NODELAY需要包含这个头文件.
 
 #include"InetAddress.h"
 // #include"Socket.h"
@@ -22,7 +22,7 @@ using namespace std;
 // 设置非阻塞的IO
 // void setnonblocking(int fd)
 // {
-//     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK).
+//     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
 // }
 
 int main(int argc,char *argv[])
@@ -38,7 +38,7 @@ int main(int argc,char *argv[])
  
 
  
-  EchoServer echoserver(argv[1],atoi(argv[2]),3,2);
+  EchoServer echoserver(argv[1],atoi(argv[2]),3,0);
   echoserver.Start();
   return 0;
 }

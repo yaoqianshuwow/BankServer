@@ -124,7 +124,7 @@ while (1)
 int main(int argc,char *argv[])
 {  
 
- 
+  sleep(3);
   if (argc!=3)
   {
     cout << "Using:./client 服务端的IP 服务端的端口\nExample:./client 192.168.201.128 5085\n\n"; 
@@ -138,7 +138,7 @@ int main(int argc,char *argv[])
   //cout<<"拜拜"<<endl;
   return 0;
   }
-  
+  sleep(10000);
   char buff[1024];
 
 

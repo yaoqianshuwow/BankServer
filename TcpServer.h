@@ -9,6 +9,8 @@
 #include"ThreadPool.hpp"
 #include<map>
 #include<memory>
+
+#include<mutex>
 class Acceptor;
 
 class TcpServer
@@ -17,7 +19,7 @@ private:
     EventLoop loop_;         // 一个TcpServer可以有多个事件循环，现在是单线程，暂时只用一个事件循环。
     Acceptor *acceptor_;
     ThreadPool pool_;
-    
+    mutex mt;
     map<int,spConnection>conns;
     int cnt=0;
     
@@ -30,7 +32,8 @@ private:
     std::function<void(spConnection,std::string &message)> onmessagecb_;        // 回调EchoServer::HandleMessage()。
     std::function<void(spConnection)> sendcompletecb_;            // 回调EchoServer::HandleSendComplete()。
     std::function<void(EventLoop*)>  timeoutcb_;                       // 回调EchoServer::HandleTimeOut()。
-  
+    
+    void handeltimeout(spConnection conn);
 
 public:
     TcpServer(const std::string &ip,const uint16_t port ,unsigned short threadnum);

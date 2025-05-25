@@ -24,7 +24,7 @@ Connection::Connection(EventLoop *loop,Socket *clientsock):loop_(loop),clientsoc
 Connection::~Connection(){
 cout<<"调用了析构函数"<<endl;
 // delete clientchannel_;
-// delete clientsock_;
+// delete clientsock_;??
 
 }
 string Connection::ip()const{
@@ -83,14 +83,15 @@ while (true) {             // 由于使用非阻塞 IO，一次读取 buffer 大
             //cout<<len<<endl;
             if(inputbuffer_.size()<len+4)break;
             string str(inputbuffer_.data()+4,len);
+            ts=Timestamp::now();
             printf("recv(eventfd=%d): %s", fd(), str.c_str());
-
+     
             onmessagecallback_(shared_from_this(),str);
         // 接收信息(读事件)：在subloop线程里运行，1、onmessage分包
         // 计算过程（和读事件同时调用）:在工作线程里运行,1、简单计算（数据库写入也可以），2、send函数写入发送缓冲区开启写事件监听，3、开启监听写事件。
         // 回应信息(写事件，内核发送缓冲区空就会触发):subloop线程里运行,1、writecallback函数发送数据，2、outbuffer空就关闭监听。
             inputbuffer_.erase(0,len+4);
-
+            
             
         }
         
@@ -141,4 +142,9 @@ void Connection::sendinloop(const char *data,size_t size)
     string str(&data[4],size-4);
     cout<<"服务端回应报文:"<<str<<endl;
     delete data;
+}
+int Connection::laststamp(){
+
+
+    return ts.toint();
 }

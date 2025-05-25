@@ -14,7 +14,7 @@ TcpServer::TcpServer(const std::string &ip,const uint16_t port,unsigned short  t
 acceptor_=new Acceptor(&loop_,ip,port);
 
 acceptor_->setnewconnectioncb(bind(&TcpServer::newconnection,this,placeholders::_1));    
-
+loop_.settimeout(true,5);
  for(int i=0;i<pool_.idnum();i++){
 
    subloop_.push_back(std::make_unique<EventLoop>());
@@ -24,7 +24,7 @@ acceptor_->setnewconnectioncb(bind(&TcpServer::newconnection,this,placeholders::
    
    //
    pool_.addtask([task]() { (*task)(); });
-   
+   subloop_[i]->settimeout(false,10);
    //插入loop 为什么要用 uniptr呢？？？ 额 ，装逼好像是，没啥用
    
   // sleep(10);
@@ -51,6 +51,9 @@ void TcpServer::newconnection(Socket *clientsock)
    conn->setonmessagecallback(std::bind(&TcpServer::onmessage,this,placeholders::_1,placeholders::_2));
    conns[conn->fd()]=conn;
    newconnectioncb_(conn);
+   subloop_[clientsock->fd()%pool_.idnum()]->newconnewcton(conn->fd(),conn);
+   subloop_[clientsock->fd()%pool_.idnum()]->settimeout(std::bind(&TcpServer::handeltimeout,this,placeholders::_1));
+
 }
 void TcpServer::closeconnection(spConnection conn){
    
@@ -107,4 +110,9 @@ void TcpServer::setsendcompletecb(std::function<void(spConnection)> fn)
 void TcpServer::settimeoutcb(std::function<void(EventLoop*)> fn)
 {
     timeoutcb_=fn;
+}
+
+void TcpServer::handeltimeout(spConnection conn){
+    lock_guard<mutex> lock{mt};
+    conns.erase(conn->fd());
 }
