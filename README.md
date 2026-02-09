@@ -1,19 +1,25 @@
-uu# BankServer 项目 README
+# BankServer 项目 README
 
 ## 1. 项目概述
 
 ### 1.1 项目简介
+本项目是一个基于 C++ 开发的高性能网络库，核心目标是构建一个支持高并发连接的可靠网络通信框架。项目采用主从 Reactor 模型与线程池技术，通过面向对象设计封装底层 epoll 与 socket，实现了高效的异步事件处理、智能内存管理、灵活的数据分包及空闲连接清理等功能。
+
 - 基于 C++ 和 Linux epoll 实现的高性能 TCP 网络服务器
 - 支持多线程处理，采用事件驱动架构
 - 适用于高并发网络应用场景
 
 ### 1.2 核心特性
-- 基于 epoll 的 I/O 多路复用
-- 多线程事件循环模型
-- 非阻塞 I/O 操作
-- 智能指针管理资源
-- 函数对象回调机制
-- 缓冲区管理
+- **高并发架构**: 采用主从 Reactor 模型，主 Reactor 通过 epoll 监听连接，接受后交由从 Reactor；从 Reactor 通过 Channel 管理 socket 事件，由事件循环驱动回调处理，实现高效并发和简单的负载均衡。
+- **智能内存管理**: 使用 RAII 与智能指针，自动管理资源，避免内存泄漏。
+- **灵活数据包**: 解决粘包问题，支持固定长度、特殊字符、头部长度三种分包方案。
+- **双线程池设计**: 通过事件循环与计算任务分离，通过管道和条件变量在 I/O 线程与工作线程间传递消息，设计任务队列，统一加锁，减少了锁的使用。
+- **内存缓冲区**: 采用 ET 内存缓冲区，由于采用非阻塞 I/O，发送缓冲区接管不能一次性发送的数据，接收缓冲区减少等待时间。
+- **连接生命周期管理**: 基于哈希表实现空闲连接定时清理，避免收到过多垃圾信息导致内存耗尽。
+- **基于 epoll 的 I/O 多路复用**: 高效处理大量连接
+- **多线程事件循环模型**: 充分利用多核 CPU
+- **非阻塞 I/O 操作**: 避免线程阻塞
+- **函数对象回调机制**: 灵活的事件处理方式
 
 ### 1.3 技术栈
 - **语言**: C++11/14
@@ -108,6 +114,83 @@ flowchart TD
 - **Connection**: 连接管理，处理数据收发
 - **Epoll**: 底层 I/O 多路复用实现
 - **ThreadPool**: 线程池，处理并发任务
+
+### 3.3 主从 Reactor 模型设计
+主从 Reactor 模型是本项目的核心架构设计，通过分离连接接受和数据处理，实现了高效的并发处理能力。
+
+#### 3.3.1 模型架构
+```mermaid
+flowchart TD
+    subgraph 主Reactor
+        MainReactor[EventLoop\n主Reactor]
+        Acceptor[Acceptor\n连接接受]
+        MainEpoll[Epoll\n监听连接]
+    end
+    
+    subgraph 从Reactor
+        SubReactor1[EventLoop\n从Reactor 1]
+        SubReactor2[EventLoop\n从Reactor 2]
+        SubReactor3[EventLoop\n从Reactor N]
+        SubEpoll1[Epoll\nI/O事件监听]
+        SubEpoll2[Epoll\nI/O事件监听]
+        SubEpoll3[Epoll\nI/O事件监听]
+    end
+    
+    subgraph 连接管理
+        Connection1[Connection\n连接1]
+        Connection2[Connection\n连接2]
+        Connection3[Connection\n连接N]
+    end
+    
+    subgraph 业务处理
+        ThreadPool[ThreadPool\n工作线程池]
+        BusinessLogic[EchoServer\n业务逻辑]
+    end
+    
+    Client[客户端] -->|连接请求| MainEpoll
+    MainEpoll -->|通知| MainReactor
+    MainReactor -->|调用| Acceptor
+    Acceptor -->|创建连接| Connection1
+    Acceptor -->|负载均衡| SubReactor1
+    Acceptor -->|负载均衡| SubReactor2
+    Acceptor -->|负载均衡| SubReactor3
+    
+    SubReactor1 -->|管理| SubEpoll1
+    SubReactor2 -->|管理| SubEpoll2
+    SubReactor3 -->|管理| SubEpoll3
+    
+    Connection1 -->|注册事件| SubEpoll1
+    Connection2 -->|注册事件| SubEpoll2
+    Connection3 -->|注册事件| SubEpoll3
+    
+    SubReactor1 -->|事件通知| Connection1
+    SubReactor2 -->|事件通知| Connection2
+    SubReactor3 -->|事件通知| Connection3
+    
+    Connection1 -->|数据处理| ThreadPool
+    Connection2 -->|数据处理| ThreadPool
+    Connection3 -->|数据处理| ThreadPool
+    
+    ThreadPool -->|业务逻辑| BusinessLogic
+    BusinessLogic -->|响应| Connection1
+```
+
+#### 3.3.2 工作流程
+1. **连接接受**：主 Reactor 通过 epoll 监听连接事件，当有新连接到来时，Acceptor 负责接受连接并创建对应的 Connection 对象。
+
+2. **负载均衡**：主 Reactor 采用轮询或其他负载均衡策略，将新创建的 Connection 对象分配给不同的从 Reactor。
+
+3. **事件处理**：从 Reactor 通过 Channel 管理 socket 事件，当连接上有数据可读/可写时，触发相应的事件回调。
+
+4. **业务处理**：从 Reactor 处理 I/O 事件，对于需要复杂业务逻辑处理的请求，将其交给工作线程池处理，避免阻塞 I/O 线程。
+
+5. **响应发送**：业务处理完成后，通过 Connection 对象将响应发送给客户端。
+
+#### 3.3.3 优势
+- **高并发处理**：多个从 Reactor 可以同时处理多个连接的事件，充分利用多核 CPU。
+- **负载均衡**：通过合理分配连接，实现简单有效的负载均衡。
+- **职责分离**：主 Reactor 专注于连接接受，从 Reactor 专注于事件处理，职责明确，代码结构清晰。
+- **弹性扩展**：可以根据系统负载动态调整从 Reactor 的数量，提高系统的可扩展性。
 
 ## 4. 核心功能模块
 
