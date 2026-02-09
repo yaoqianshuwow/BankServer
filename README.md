@@ -1,4 +1,4 @@
-# BankServer 项目 README
+uu# BankServer 项目 README
 
 ## 1. 项目概述
 
@@ -56,7 +56,50 @@ make clean
 ## 3. 架构设计
 
 ### 3.1 整体架构图
-![整体架构图](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Bank%20Server%20architecture%20diagram%20showing%20TcpServer%2C%20EchoServer%2C%20EventLoop%2C%20Connection%2C%20Epoll%20and%20ThreadPool%20modules%20with%20their%20relationships%2C%20technical%20diagram%20with%20clear%20arrows%20and%20labels&image_size=landscape_16_9)
+```mermaid
+flowchart TD
+    subgraph 应用层
+        EchoServer[EchoServer\n业务逻辑实现]
+    end
+    
+    subgraph 服务器核心层
+        TcpServer[TcpServer\n服务器核心]
+        Acceptor[Acceptor\n新连接处理]
+    end
+    
+    subgraph 事件处理层
+        EventLoop[EventLoop\n事件循环]
+        Channel[Channel\n事件通道]
+    end
+    
+    subgraph 连接管理层
+        Connection[Connection\n连接管理]
+        Buffer[Buffer\n缓冲区管理]
+    end
+    
+    subgraph 底层实现
+        Epoll[Epoll\nI/O多路复用]
+        Socket[Socket\n网络套接字]
+    end
+    
+    subgraph 并发处理
+        ThreadPool[ThreadPool\n线程池]
+    end
+    
+    EchoServer -->|启动| TcpServer
+    EchoServer -->|回调处理| Connection
+    TcpServer -->|管理| Acceptor
+    TcpServer -->|创建| EventLoop
+    TcpServer -->|管理| Connection
+    TcpServer -->|使用| ThreadPool
+    Acceptor -->|创建| Connection
+    EventLoop -->|管理| Channel
+    EventLoop -->|使用| Epoll
+    Connection -->|包含| Channel
+    Connection -->|使用| Buffer
+    Connection -->|使用| Socket
+    Channel -->|注册事件| Epoll
+```
 
 ### 3.2 核心模块关系
 - **TcpServer**: 服务器核心，管理连接和事件循环
@@ -120,16 +163,81 @@ make clean
 ## 5. 工作流程
 
 ### 5.1 服务器启动流程
-![服务器启动流程图](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Bank%20Server%20startup%20flow%20diagram%20showing%20steps%20from%20initialization%20to%20listening%20for%20connections%2C%20technical%20flowchart%20with%20clear%20steps%20and%20decision%20points&image_size=landscape_16_9)
+```mermaid
+flowchart TD
+    A[初始化 EchoServer] -->|创建| B[TcpServer 实例]
+    B -->|初始化| C[EventLoop]
+    C -->|创建| D[Epoll 实例]
+    B -->|初始化| E[Acceptor]
+    E -->|创建| F[监听 Socket]
+    F -->|绑定| G[IP 和端口]
+    F -->|监听| H[连接请求]
+    B -->|启动| I[线程池]
+    I -->|创建| J[工作线程]
+    B -->|调用| K[start\(\) 方法]
+    K -->|启动| L[EventLoop.run\(\)]
+    L -->|等待| M[I/O 事件]
+```
 
 ### 5.2 连接处理流程
-![连接管理示意图](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Bank%20Server%20connection%20management%20diagram%20showing%20how%20new%20connections%20are%20accepted%20and%20managed%2C%20technical%20diagram%20with%20arrows%20showing%20data%20flow&image_size=landscape_16_9)
+```mermaid
+flowchart TD
+    A[客户端连接请求] -->|到达| B[监听 Socket]
+    B -->|触发| C[Acceptor 处理]
+    C -->|调用| D[TcpServer.newconnection\(\)]
+    D -->|创建| E[Connection 实例]
+    E -->|创建| F[客户端 Socket]
+    E -->|创建| G[Channel 实例]
+    G -->|注册| H[EventLoop]
+    H -->|添加到| I[Epoll]
+    E -->|存储| J[连接映射表]
+    J -->|管理| K[连接生命周期]
+    K -->|数据收发| L[Buffer 处理]
+    K -->|连接关闭| M[清理资源]
+```
 
 ### 5.3 消息处理流程
-![消息处理流程图](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Bank%20Server%20message%20processing%20flow%20diagram%20showing%20how%20client%20messages%20are%20received%2C%20processed%20and%20responded%2C%20technical%20flowchart%20with%20clear%20steps&image_size=landscape_16_9)
+```mermaid
+flowchart TD
+    A[客户端发送数据] -->|到达| B[客户端 Socket]
+    B -->|触发| C[Channel 可读事件]
+    C -->|通知| D[EventLoop]
+    D -->|调用| E[Connection.onmessage\(\)]
+    E -->|读取| F[输入缓冲区]
+    F -->|解析| G[消息内容]
+    G -->|回调| H[EchoServer.HandleMessage\(\)]
+    H -->|处理业务逻辑| I[生成响应]
+    I -->|调用| J[Connection.send\(\)]
+    J -->|写入| K[输出缓冲区]
+    K -->|触发| L[Channel 可写事件]
+    L -->|通知| M[EventLoop]
+    M -->|调用| N[Connection.writecallback\(\)]
+    N -->|发送| O[客户端]
+```
 
 ### 5.4 事件循环流程
-![事件循环流程图](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Bank%20Server%20event%20loop%20flow%20diagram%20showing%20the%20process%20of%20waiting%20for%20events%2C%20processing%20them%20and%20looping%2C%20technical%20diagram%20with%20clear%20steps&image_size=landscape_16_9)
+```mermaid
+flowchart TD
+    A[EventLoop.run\(\)] -->|启动| B[进入循环]
+    B -->|调用| C[Epoll.wait\(\)]
+    C -->|等待| D[I/O 事件]
+    D -->|返回| E[就绪事件列表]
+    E -->|遍历| F[处理每个事件]
+    F -->|判断事件类型| G{事件类型}
+    G -->|可读事件| H[处理可读事件]
+    G -->|可写事件| I[处理可写事件]
+    G -->|错误事件| J[处理错误事件]
+    H -->|调用| K[Channel 回调]
+    I -->|调用| L[Channel 回调]
+    J -->|调用| M[Channel 回调]
+    K -->|检查| N[是否有队列任务]
+    L -->|检查| N
+    M -->|检查| N
+    N -->|有| O[执行队列任务]
+    N -->|无| P[继续循环]
+    O -->|完成后| P
+    P -->|回到| B
+```
 
 ## 6. 代码结构
 
@@ -341,16 +449,18 @@ server.Start();
 // 接收响应
 ```
 
-## 插图说明
+## 流程图说明
+
+本文档使用 Mermaid 语法创建了以下流程图，以帮助读者更直观地理解项目的架构和工作原理：
 
 1. **整体架构图**: 展示了各个模块之间的关系，包括 TcpServer、EchoServer、EventLoop、Connection、Epoll 和 ThreadPool 等核心组件。
 
-2. **事件循环流程图**: 展示了事件循环的工作流程，包括等待事件、处理事件、更新通道等步骤。
+2. **服务器启动流程图**: 展示了服务器的启动流程，包括初始化、创建套接字、绑定端口、监听连接等步骤。
 
 3. **连接管理示意图**: 展示了连接的生命周期管理，包括新连接建立、数据收发、连接关闭等过程。
 
-4. **服务器启动流程图**: 展示了服务器的启动流程，包括初始化、创建套接字、绑定端口、监听连接等步骤。
+4. **消息处理流程图**: 展示了客户端消息的处理流程，包括接收消息、解析消息、处理业务逻辑、发送响应等步骤。
 
-5. **消息处理流程图**: 展示了客户端消息的处理流程，包括接收消息、解析消息、处理业务逻辑、发送响应等步骤。
+5. **事件循环流程图**: 展示了事件循环的工作流程，包括等待事件、处理事件、执行队列任务等步骤。
 
-这些插图将帮助读者更直观地理解项目的架构和工作原理，提高文档的可读性和专业性。
+这些流程图将帮助读者更直观地理解项目的架构和工作原理，提高文档的可读性和专业性。
