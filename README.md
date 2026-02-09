@@ -257,8 +257,8 @@ flowchart TD
     F --> H[监听连接请求]
     B --> I[启动线程池]
     I --> J[创建工作线程]
-    B --> K[调用 start() 方法]
-    K --> L[启动 EventLoop.run()]
+    B --> K[调用 start 方法]
+    K --> L[启动 EventLoop run]
     L --> M[等待 I/O 事件]
 ```
 
@@ -267,7 +267,7 @@ flowchart TD
 flowchart TD
     A[客户端连接请求] --> B[监听 Socket]
     B --> C[Acceptor 处理]
-    C --> D[TcpServer.newconnection()]
+    C --> D[TcpServer newconnection]
     D --> E[Connection 实例]
     E --> F[客户端 Socket]
     E --> G[Channel 实例]
@@ -285,24 +285,24 @@ flowchart TD
     A[客户端发送数据] --> B[客户端 Socket]
     B --> C[Channel 可读事件]
     C --> D[EventLoop]
-    D --> E[Connection.onmessage()]
+    D --> E[Connection onmessage]
     E --> F[输入缓冲区]
     F --> G[消息内容]
-    G --> H[EchoServer.HandleMessage()]
+    G --> H[EchoServer HandleMessage]
     H --> I[生成响应]
-    I --> J[Connection.send()]
+    I --> J[Connection send]
     J --> K[输出缓冲区]
     K --> L[Channel 可写事件]
     L --> M[EventLoop]
-    M --> N[Connection.writecallback()]
+    M --> N[Connection writecallback]
     N --> O[客户端]
 ```
 
 ### 5.4 事件循环流程
 ```mermaid
 flowchart TD
-    A[EventLoop.run()] --> B[进入循环]
-    B --> C[Epoll.wait()]
+    A[EventLoop run] --> B[进入循环]
+    B --> C[Epoll wait]
     C --> D[I/O 事件]
     D --> E[就绪事件列表]
     E --> F[处理每个事件]
