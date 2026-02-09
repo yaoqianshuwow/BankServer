@@ -147,32 +147,32 @@ flowchart TD
         BusinessLogic[EchoServer\n业务逻辑]
     end
     
-    Client[客户端] -->|连接请求| MainEpoll
-    MainEpoll -->|通知| MainReactor
-    MainReactor -->|调用| Acceptor
-    Acceptor -->|创建连接| Connection1
-    Acceptor -->|负载均衡| SubReactor1
-    Acceptor -->|负载均衡| SubReactor2
-    Acceptor -->|负载均衡| SubReactor3
+    Client[客户端] --> MainEpoll
+    MainEpoll --> MainReactor
+    MainReactor --> Acceptor
+    Acceptor --> Connection1
+    Acceptor --> SubReactor1
+    Acceptor --> SubReactor2
+    Acceptor --> SubReactor3
     
-    SubReactor1 -->|管理| SubEpoll1
-    SubReactor2 -->|管理| SubEpoll2
-    SubReactor3 -->|管理| SubEpoll3
+    SubReactor1 --> SubEpoll1
+    SubReactor2 --> SubEpoll2
+    SubReactor3 --> SubEpoll3
     
-    Connection1 -->|注册事件| SubEpoll1
-    Connection2 -->|注册事件| SubEpoll2
-    Connection3 -->|注册事件| SubEpoll3
+    Connection1 --> SubEpoll1
+    Connection2 --> SubEpoll2
+    Connection3 --> SubEpoll3
     
-    SubReactor1 -->|事件通知| Connection1
-    SubReactor2 -->|事件通知| Connection2
-    SubReactor3 -->|事件通知| Connection3
+    SubReactor1 --> Connection1
+    SubReactor2 --> Connection2
+    SubReactor3 --> Connection3
     
-    Connection1 -->|数据处理| ThreadPool
-    Connection2 -->|数据处理| ThreadPool
-    Connection3 -->|数据处理| ThreadPool
+    Connection1 --> ThreadPool
+    Connection2 --> ThreadPool
+    Connection3 --> ThreadPool
     
-    ThreadPool -->|业务逻辑| BusinessLogic
-    BusinessLogic -->|响应| Connection1
+    ThreadPool --> BusinessLogic
+    BusinessLogic --> Connection1
 ```
 
 #### 3.3.2 工作流程
@@ -248,78 +248,78 @@ flowchart TD
 ### 5.1 服务器启动流程
 ```mermaid
 flowchart TD
-    A[初始化 EchoServer] -->|创建| B[TcpServer 实例]
-    B -->|初始化| C[EventLoop]
-    C -->|创建| D[Epoll 实例]
-    B -->|初始化| E[Acceptor]
-    E -->|创建| F[监听 Socket]
-    F -->|绑定| G[IP 和端口]
-    F -->|监听| H[连接请求]
-    B -->|启动| I[线程池]
-    I -->|创建| J[工作线程]
-    B -->|调用| K[start() 方法]
-    K -->|启动| L[EventLoop.run()]
-    L -->|等待| M[I/O 事件]
+    A[初始化 EchoServer] --> B[创建 TcpServer 实例]
+    B --> C[初始化 EventLoop]
+    C --> D[创建 Epoll 实例]
+    B --> E[初始化 Acceptor]
+    E --> F[创建监听 Socket]
+    F --> G[绑定 IP 和端口]
+    F --> H[监听连接请求]
+    B --> I[启动线程池]
+    I --> J[创建工作线程]
+    B --> K[调用 start() 方法]
+    K --> L[启动 EventLoop.run()]
+    L --> M[等待 I/O 事件]
 ```
 
 ### 5.2 连接处理流程
 ```mermaid
 flowchart TD
-    A[客户端连接请求] -->|到达| B[监听 Socket]
-    B -->|触发| C[Acceptor 处理]
-    C -->|调用| D[TcpServer.newconnection()]
-    D -->|创建| E[Connection 实例]
-    E -->|创建| F[客户端 Socket]
-    E -->|创建| G[Channel 实例]
-    G -->|注册| H[EventLoop]
-    H -->|添加到| I[Epoll]
-    E -->|存储| J[连接映射表]
-    J -->|管理| K[连接生命周期]
-    K -->|数据收发| L[Buffer 处理]
-    K -->|连接关闭| M[清理资源]
+    A[客户端连接请求] --> B[监听 Socket]
+    B --> C[Acceptor 处理]
+    C --> D[TcpServer.newconnection()]
+    D --> E[Connection 实例]
+    E --> F[客户端 Socket]
+    E --> G[Channel 实例]
+    G --> H[EventLoop]
+    H --> I[Epoll]
+    E --> J[连接映射表]
+    J --> K[连接生命周期]
+    K --> L[Buffer 处理]
+    K --> M[清理资源]
 ```
 
 ### 5.3 消息处理流程
 ```mermaid
 flowchart TD
-    A[客户端发送数据] -->|到达| B[客户端 Socket]
-    B -->|触发| C[Channel 可读事件]
-    C -->|通知| D[EventLoop]
-    D -->|调用| E[Connection.onmessage()]
-    E -->|读取| F[输入缓冲区]
-    F -->|解析| G[消息内容]
-    G -->|回调| H[EchoServer.HandleMessage()]
-    H -->|处理业务逻辑| I[生成响应]
-    I -->|调用| J[Connection.send()]
-    J -->|写入| K[输出缓冲区]
-    K -->|触发| L[Channel 可写事件]
-    L -->|通知| M[EventLoop]
-    M -->|调用| N[Connection.writecallback()]
-    N -->|发送| O[客户端]
+    A[客户端发送数据] --> B[客户端 Socket]
+    B --> C[Channel 可读事件]
+    C --> D[EventLoop]
+    D --> E[Connection.onmessage()]
+    E --> F[输入缓冲区]
+    F --> G[消息内容]
+    G --> H[EchoServer.HandleMessage()]
+    H --> I[生成响应]
+    I --> J[Connection.send()]
+    J --> K[输出缓冲区]
+    K --> L[Channel 可写事件]
+    L --> M[EventLoop]
+    M --> N[Connection.writecallback()]
+    N --> O[客户端]
 ```
 
 ### 5.4 事件循环流程
 ```mermaid
 flowchart TD
-    A[EventLoop.run()] -->|启动| B[进入循环]
-    B -->|调用| C[Epoll.wait()]
-    C -->|等待| D[I/O 事件]
-    D -->|返回| E[就绪事件列表]
-    E -->|遍历| F[处理每个事件]
-    F -->|判断事件类型| G{事件类型}
-    G -->|可读事件| H[处理可读事件]
-    G -->|可写事件| I[处理可写事件]
-    G -->|错误事件| J[处理错误事件]
-    H -->|调用| K[Channel 回调]
-    I -->|调用| L[Channel 回调]
-    J -->|调用| M[Channel 回调]
-    K -->|检查| N[是否有队列任务]
-    L -->|检查| N
-    M -->|检查| N
-    N -->|有| O[执行队列任务]
-    N -->|无| P[继续循环]
-    O -->|完成后| P
-    P -->|回到| B
+    A[EventLoop.run()] --> B[进入循环]
+    B --> C[Epoll.wait()]
+    C --> D[I/O 事件]
+    D --> E[就绪事件列表]
+    E --> F[处理每个事件]
+    F --> G{事件类型}
+    G --> H[处理可读事件]
+    G --> I[处理可写事件]
+    G --> J[处理错误事件]
+    H --> K[Channel 回调]
+    I --> L[Channel 回调]
+    J --> M[Channel 回调]
+    K --> N[是否有队列任务]
+    L --> N
+    M --> N
+    N --> O[执行队列任务]
+    N --> P[继续循环]
+    O --> P
+    P --> B
 ```
 
 ## 6. 代码结构
