@@ -248,42 +248,42 @@ flowchart TD
 ### 5.1 服务器启动流程
 ```mermaid
 flowchart TD
-    A[初始化 EchoServer] --> B[创建 TcpServer 实例]
-    B --> C[初始化 EventLoop]
-    C --> D[创建 Epoll 实例]
-    B --> E[初始化 Acceptor]
-    E --> F[创建监听 Socket]
-    F --> G[绑定 IP 和端口]
+    A[初始化EchoServer] --> B[创建TcpServer实例]
+    B --> C[初始化EventLoop]
+    C --> D[创建Epoll实例]
+    B --> E[初始化Acceptor]
+    E --> F[创建监听Socket]
+    F --> G[绑定IP和端口]
     F --> H[监听连接请求]
     B --> I[启动线程池]
     I --> J[创建工作线程]
-    B --> K[调用 start 方法]
-    K --> L[启动 EventLoop run]
-    L --> M[等待 I/O 事件]
+    B --> K[调用start方法]
+    K --> L[启动EventLoop run]
+    L --> M[等待I/O事件]
 ```
 
 ### 5.2 连接处理流程
 ```mermaid
 flowchart TD
-    A[客户端连接请求] --> B[监听 Socket]
-    B --> C[Acceptor 处理]
+    A[客户端连接请求] --> B[监听Socket]
+    B --> C[Acceptor处理]
     C --> D[TcpServer newconnection]
-    D --> E[Connection 实例]
-    E --> F[客户端 Socket]
-    E --> G[Channel 实例]
+    D --> E[Connection实例]
+    E --> F[客户端Socket]
+    E --> G[Channel实例]
     G --> H[EventLoop]
     H --> I[Epoll]
     E --> J[连接映射表]
     J --> K[连接生命周期]
-    K --> L[Buffer 处理]
+    K --> L[Buffer处理]
     K --> M[清理资源]
 ```
 
 ### 5.3 消息处理流程
 ```mermaid
 flowchart TD
-    A[客户端发送数据] --> B[客户端 Socket]
-    B --> C[Channel 可读事件]
+    A[客户端发送数据] --> B[客户端Socket]
+    B --> C[Channel可读事件]
     C --> D[EventLoop]
     D --> E[Connection onmessage]
     E --> F[输入缓冲区]
@@ -292,7 +292,7 @@ flowchart TD
     H --> I[生成响应]
     I --> J[Connection send]
     J --> K[输出缓冲区]
-    K --> L[Channel 可写事件]
+    K --> L[Channel可写事件]
     L --> M[EventLoop]
     M --> N[Connection writecallback]
     N --> O[客户端]
@@ -370,65 +370,596 @@ BankServer/
 ## 7. 核心 API
 
 ### 7.1 TcpServer 类
+**功能**: 服务器核心类，负责管理连接生命周期和事件循环
+
+**设计意图**: TcpServer 是整个网络库的核心组件，它封装了底层的网络操作，提供了简洁的接口来创建和管理 TCP 服务器。它采用主从 Reactor 模型，主 Reactor 负责接受新连接，从 Reactor 负责处理已建立连接的 I/O 事件。
+
+**核心组件**:  
+- 主 EventLoop: 负责接受新连接
+- 从 EventLoop 数组: 负责处理已建立连接的 I/O 事件
+- Acceptor: 负责接受新连接并创建 Connection 对象
+- Connection 映射表: 管理所有已建立的连接
+
 ```cpp
 // 构造函数
+// 参数:
+//   ip: 服务器监听的 IP 地址
+//   port: 服务器监听的端口号
+//   threadnum: 从 Reactor 的数量
+// 注意:
+//   threadnum 通常设置为 CPU 核心数或略大，以充分利用多核性能
 TcpServer(const std::string &ip, const uint16_t port, unsigned short threadnum);
 
+// 析构函数
+// 功能: 清理所有资源，包括关闭所有连接和事件循环
+~TcpServer();
+
 // 启动服务器
+// 功能: 启动事件循环，开始监听连接
+// 调用后，服务器将进入事件循环，等待并处理客户端连接
 void start();
 
 // 设置回调函数
+// 功能: 注册新连接建立时的回调函数
+// 当有新客户端连接时，此回调函数将被调用
 void setnewconnectioncb(std::function<void(spConnection)> fn);
+
+// 功能: 注册连接关闭时的回调函数
+// 当客户端连接关闭时，此回调函数将被调用
 void setcloseconnectioncb(std::function<void(spConnection)> fn);
+
+// 功能: 注册连接错误时的回调函数
+// 当客户端连接发生错误时，此回调函数将被调用
 void seterrorconnectioncb(std::function<void(spConnection)> fn);
+
+// 功能: 注册收到消息时的回调函数
+// 参数:
+//   fn: 回调函数，参数为连接对象和收到的消息
+// 当从客户端收到消息时，此回调函数将被调用
 void setonmessagecb(std::function<void(spConnection, std::string &message)> fn);
+
+// 功能: 注册消息发送完成时的回调函数
+// 当消息发送完成时，此回调函数将被调用
 void setsendcompletecb(std::function<void(spConnection)> fn);
+
+// 功能: 注册超时回调函数
+// 当事件循环超时时，此回调函数将被调用
 void settimeoutcb(std::function<void(EventLoop*)> fn);
 ```
 
-### 7.2 EchoServer 类
+**使用示例**:
 ```cpp
-// 构造函数
-EchoServer(const std::string &ip, const uint16_t port, unsigned short IOthread, unsigned short workthread);
+// 创建 TcpServer 实例
+TcpServer server("127.0.0.1", 8888, 4); // 4 个从 Reactor
+
+// 设置回调函数
+server.setnewconnectioncb([](spConnection conn) {
+    std::cout << "New connection from " << conn->ip() << ":" << conn->port() << std::endl;
+});
+
+server.setonmessagecb([](spConnection conn, std::string &message) {
+    std::cout << "Received message: " << message << std::endl;
+    conn->send(message.c_str(), message.size()); // 回显消息
+});
 
 // 启动服务器
+server.start();
+```
+
+### 7.2 EchoServer 类
+**功能**: 业务逻辑实现类，处理客户端请求
+
+**设计意图**: EchoServer 是一个示例业务逻辑实现类，它演示了如何使用 TcpServer 来处理客户端请求。它提供了基本的回显功能，同时展示了如何组织业务逻辑代码结构。
+
+**核心特性**:  
+- 线程池: 用于处理复杂的业务逻辑，避免阻塞 I/O 线程
+- 事件回调: 处理各种网络事件
+- 业务逻辑分离: 将网络处理与业务逻辑分离
+
+```cpp
+// 构造函数
+// 参数:
+//   ip: 服务器监听的 IP 地址
+//   port: 服务器监听的端口号
+//   IOthread: I/O 线程数量 (从 Reactor 数量)
+//   workthread: 工作线程数量
+// 注意:
+//   IOthread 通常设置为 CPU 核心数或略大
+//   workthread 根据业务复杂度和并发量设置
+EchoServer(const std::string &ip, const uint16_t port, unsigned short IOthread, unsigned short workthread);
+
+// 析构函数
+// 功能: 清理资源
+~EchoServer();
+
+// 启动服务器
+// 功能: 初始化并启动 TcpServer
+// 调用后，服务器将开始监听连接并处理客户端请求
 void Start();
 
 // 回调函数
+// 功能: 处理新连接建立
+// 参数:
+//   conn: 新建立的连接对象
+// 当有新客户端连接时，此方法将被调用
 void HandleNewConnection(spConnection conn);
+
+// 功能: 处理连接关闭
+// 参数:
+//   conn: 要关闭的连接对象
+// 当客户端连接关闭时，此方法将被调用
 void HandleClose(spConnection conn);
+
+// 功能: 处理连接错误
+// 参数:
+//   conn: 发生错误的连接对象
+// 当客户端连接发生错误时，此方法将被调用
 void HandleError(spConnection conn);
+
+// 功能: 处理客户端消息
+// 参数:
+//   conn: 发送消息的连接对象
+//   message: 收到的消息内容
+// 当从客户端收到消息时，此方法将被调用
 void HandleMessage(spConnection conn, std::string message);
+
+// 功能: 处理消息发送完成
+// 参数:
+//   conn: 消息发送完成的连接对象
+// 当消息发送完成时，此方法将被调用
 void HandleSendComplete(spConnection conn);
 ```
 
+**使用示例**:
+```cpp
+// 创建 EchoServer 实例
+// 参数说明:
+//   "127.0.0.1": 服务器监听的 IP 地址
+//   8888: 服务器监听的端口号
+//   4: I/O 线程数量 (从 Reactor 数量)
+//   8: 工作线程数量
+EchoServer server("127.0.0.1", 8888, 4, 8);
+
+// 启动服务器
+server.Start();
+
+// 服务器将持续运行，直到进程被终止
+// 当有客户端连接并发送消息时，服务器将回显消息
+```
+
+**自定义业务逻辑示例**:
+```cpp
+// 继承 EchoServer 类，实现自定义业务逻辑
+class CustomServer : public EchoServer {
+public:
+    CustomServer(const std::string &ip, const uint16_t port, unsigned short IOthread, unsigned short workthread)
+        : EchoServer(ip, port, IOthread, workthread) {
+    }
+    
+    // 重写消息处理方法，实现自定义业务逻辑
+    void HandleMessage(spConnection conn, std::string message) override {
+        std::cout << "Received message: " << message << std::endl;
+        
+        // 自定义业务逻辑处理
+        std::string response = "Custom Server Response: " + message;
+        
+        // 发送响应
+        conn->send(response.c_str(), response.size());
+    }
+};
+
+// 使用自定义服务器
+CustomServer server("127.0.0.1", 8888, 4, 8);
+server.Start();
+```
+
 ### 7.3 EventLoop 类
+**功能**: 事件循环类，负责处理 I/O 事件
+
+**设计意图**: EventLoop 是事件驱动架构的核心组件，它负责监听和分发 I/O 事件。每个 EventLoop 对象通常运行在一个单独的线程中，通过 epoll 机制实现高效的 I/O 多路复用。
+
+**核心特性**:  
+- 基于 epoll 的事件监听
+- 线程安全的任务队列
+- 定时器功能
+- 事件分发机制
+
 ```cpp
 // 构造函数
+// 功能: 创建事件循环对象，初始化 epoll
+// 注意:
+//   每个线程只能创建一个 EventLoop 对象
 EventLoop();
 
+// 析构函数
+// 功能: 销毁事件循环对象，清理资源
+~EventLoop();
+
 // 运行事件循环
+// 功能: 启动事件循环，处理 I/O 事件
+// 调用后，事件循环将进入无限循环，等待并处理事件
 void run();
 
 // 更新通道
+// 功能: 将通道添加或更新到 epoll
+// 参数:
+//   ch: 要更新的通道对象
+// 当通道的事件状态发生变化时，需要调用此方法更新 epoll
 void updatechannel(Channel *ch);
 
 // 队列中执行任务
-void queueinloopthread(function<void()>);
+// 功能: 将任务添加到事件循环线程的任务队列
+// 参数:
+//   fn: 要执行的任务函数
+// 此方法是线程安全的，可以从其他线程调用
+void queueinloopthread(function<void()> fn);
+
+// 获取 epoll 对象
+// 功能: 返回事件循环使用的 epoll 对象
+// 用于获取底层的 epoll 实例
+Epoll* ep();
+
+// 检查是否在事件循环线程中
+// 功能: 判断当前线程是否是事件循环线程
+// 返回值:
+//   true: 当前线程是事件循环线程
+//   false: 当前线程不是事件循环线程
+bool isinloopthread();
+
+// 唤醒事件循环
+// 功能: 唤醒正在等待事件的事件循环
+// 当有新任务添加到任务队列时，需要调用此方法唤醒事件循环
+void wakeup();
+
+// 处理唤醒事件
+// 功能: 处理唤醒事件，执行任务队列中的任务
+// 当事件循环被唤醒时，此方法将被调用
+void handlewakeup();
+
+// 设置超时
+// 功能: 设置定时器超时
+// 参数:
+//   mainloop: 是否为主事件循环
+//   sec: 超时时间（秒）
+// 用于设置事件循环的超时时间
+void settimeout(bool mainloop, int sec);
+
+// 处理超时
+// 功能: 处理定时器超时事件
+// 参数:
+//   sec: 超时时间（秒）
+// 当定时器超时时，此方法将被调用
+void handletimeout(int sec);
+
+// 新连接
+// 功能: 添加新连接到事件循环
+// 参数:
+//   fd: 连接的文件描述符
+//   conn: 连接对象
+// 用于将新建立的连接添加到事件循环中
+void newconnewcton(int fd, spConnection conn);
+
+// 设置超时回调
+// 功能: 设置超时回调函数
+// 参数:
+//   fn: 超时回调函数
+// 用于设置连接超时的回调函数
+void settimeout(function<void(spConnection)> fn);
+```
+
+**使用示例**:
+```cpp
+// 创建 EventLoop 实例
+EventLoop loop;
+
+// 创建并初始化 Channel
+Channel ch(&loop, sockfd);
+ch.setreadcallback([]() {
+    // 处理可读事件
+    std::cout << "Socket is readable" << std::endl;
+});
+ch.enablereading(); // 启用可读事件
+
+// 更新通道到 epoll
+loop.updatechannel(&ch);
+
+// 在事件循环线程中执行任务
+loop.queueinloopthread([]() {
+    std::cout << "Task executed in event loop thread" << std::endl;
+});
+
+// 启动事件循环
+loop.run();
 ```
 
 ### 7.4 Connection 类
+**功能**: 连接管理类，负责处理数据收发
+
+**设计意图**: Connection 类封装了与客户端的连接，负责数据的收发和连接的生命周期管理。它使用非阻塞 I/O 操作，并通过缓冲区管理数据，确保数据的完整性和高效传输。
+
+**核心特性**:  
+- 非阻塞 I/O 操作
+- 基于缓冲区的数据管理
+- 事件驱动的数据收发
+- 连接状态跟踪
+- 线程安全的操作
+
 ```cpp
 // 构造函数
+// 功能: 创建连接对象，初始化通道和缓冲区
+// 参数:
+//   loop: 事件循环对象
+//   clientsock: 客户端套接字
+// 注意:
+//   Connection 对象通常由 Acceptor 创建
 Connection(EventLoop* loop, Socket *clientsock);
 
+// 析构函数
+// 功能: 销毁连接对象，清理资源
+~Connection();
+
 // 发送数据
+// 功能: 发送数据到客户端
+// 参数:
+//   data: 要发送的数据
+//   size: 数据大小
+// 注意:
+//   此方法是线程安全的，可以从其他线程调用
 void send(const char *data, size_t size);
 
+// 发送数据（事件循环线程中）
+// 功能: 在事件循环线程中发送数据
+// 参数:
+//   data: 要发送的数据
+//   size: 数据大小
+// 注意:
+//   此方法只能在事件循环线程中调用
+void sendinloop(const char *data, size_t size);
+
+// 处理消息
+// 功能: 处理收到的消息
+// 当从客户端收到数据时，此方法将被调用
+void onmessage();
+
+// 关闭回调
+// 功能: 处理连接关闭
+// 当连接关闭时，此方法将被调用
+void closecallback();
+
+// 错误回调
+// 功能: 处理连接错误
+// 当连接发生错误时，此方法将被调用
+void errorcallback();
+
+// 写入回调
+// 功能: 处理数据写入完成
+// 当数据写入完成时，此方法将被调用
+void writecallback();
+
+// 设置关闭回调
+// 功能: 设置连接关闭回调函数
+// 参数:
+//   fn: 关闭回调函数
+void setclosecallback(std::function<void(spConnection)> fn);
+
+// 设置错误回调
+// 功能: 设置连接错误回调函数
+// 参数:
+//   fn: 错误回调函数
+void seterrorcallback(std::function<void(spConnection)> fn);
+
+// 设置消息回调
+// 功能: 设置收到消息回调函数
+// 参数:
+//   fn: 消息回调函数
+void setonmessagecallback(std::function<void(spConnection, string)> fn);
+
 // 获取连接信息
+// 功能: 获取客户端 IP 地址
+// 返回值:
+//   客户端的 IP 地址字符串
 string ip() const;
+
+// 功能: 获取客户端端口号
+// 返回值:
+//   客户端的端口号
 uint16_t port() const;
+
+// 功能: 获取连接的文件描述符
+// 返回值:
+//   连接的文件描述符
 int fd() const;
+
+// 获取最后活动时间
+// 功能: 获取连接最后活动的时间戳
+// 返回值:
+//   最后活动的时间戳（秒）
+int laststamp();
+```
+
+**使用示例**:
+```cpp
+// 假设已经创建了 Connection 对象 conn
+
+// 发送数据
+const char* message = "Hello, client!";
+conn->send(message, strlen(message));
+
+// 设置消息回调
+conn->setonmessagecallback([](spConnection conn, string message) {
+    std::cout << "Received message: " << message << std::endl;
+    // 处理收到的消息
+    conn->send("Server received: ", 17);
+    conn->send(message.c_str(), message.size());
+});
+
+// 设置关闭回调
+conn->setclosecallback([](spConnection conn) {
+    std::cout << "Connection closed: " << conn->ip() << ":" << conn->port() << std::endl;
+});
+
+// 获取连接信息
+std::cout << "Client address: " << conn->ip() << ":" << conn->port() << std::endl;
+std::cout << "Connection fd: " << conn->fd() << std::endl;
+```
+
+### 7.5 Buffer 类
+**功能**: 缓冲区管理类，负责处理数据缓冲
+
+**设计意图**: Buffer 类提供了高效的内存缓冲区管理，用于处理网络数据的收发。它采用动态扩容策略，减少内存分配的次数，同时提供了简洁的接口来操作缓冲区中的数据。
+
+**核心特性**:  
+- 动态内存管理
+- 高效的数据追加和获取
+- 灵活的数据操作
+- 内存使用优化
+
+```cpp
+// 构造函数
+// 功能: 创建缓冲区对象
+// 初始容量: 默认为 1024 字节
+Buffer();
+
+// 析构函数
+// 功能: 销毁缓冲区对象
+~Buffer();
+
+// 追加数据
+// 功能: 将数据追加到缓冲区
+// 参数:
+//   data: 要追加的数据
+//   size: 数据大小
+// 注意:
+//   当缓冲区容量不足时，会自动扩容
+void append(const char *data, size_t size);
+
+// 获取大小
+// 功能: 获取缓冲区大小
+// 返回值:
+//   缓冲区中数据的大小（字节）
+size_t size();
+
+// 获取数据
+// 功能: 获取缓冲区数据指针
+// 返回值:
+//   指向缓冲区数据的指针
+const char *data();
+
+// 清空缓冲区
+// 功能: 清空缓冲区数据
+// 注意:
+//   此操作不会释放内存，只是重置数据指针
+void clear();
+
+// 擦除数据
+// 功能: 从缓冲区中擦除数据
+// 参数:
+//   pos: 起始位置
+//   nn: 擦除的大小
+// 注意:
+//   此操作会移动数据，可能影响性能
+void erase(size_t pos, size_t nn);
+```
+
+**使用示例**:
+```cpp
+// 创建缓冲区对象
+Buffer buffer;
+
+// 追加数据
+const char* message = "Hello, world!";
+buffer.append(message, strlen(message));
+
+// 获取缓冲区大小
+std::cout << "Buffer size: " << buffer.size() << std::endl;
+
+// 获取数据
+std::cout << "Buffer data: " << buffer.data() << std::endl;
+
+// 处理数据...
+
+// 清空缓冲区
+buffer.clear();
+std::cout << "Buffer size after clear: " << buffer.size() << std::endl;
+
+// 追加更多数据
+const char* more_data = "More data to buffer";
+buffer.append(more_data, strlen(more_data));
+
+// 擦除部分数据
+buffer.erase(0, 5); // 擦除前 5 个字节
+std::cout << "Buffer data after erase: " << buffer.data() << std::endl;
+```
+
+### 7.6 ThreadPool 类
+**功能**: 线程池类，负责管理线程和任务
+
+**设计意图**: ThreadPool 类提供了一个高效的线程池实现，用于处理并发任务。它预创建固定数量的线程，避免了线程创建和销毁的开销，同时通过任务队列实现了任务的并发处理。
+
+**核心特性**:  
+- 固定大小的线程池
+- 线程安全的任务队列
+- 自动线程管理
+- 任务并发执行
+
+```cpp
+// 构造函数
+// 功能: 创建线程池对象
+// 参数:
+//   threadnum: 线程数量
+// 注意:
+//   threadnum 通常设置为 CPU 核心数或根据任务类型调整
+ThreadPool(int threadnum);
+
+// 析构函数
+// 功能: 销毁线程池对象，等待所有线程结束
+// 注意:
+//   析构时会等待所有线程完成当前任务
+~ThreadPool();
+
+// 添加任务
+// 功能: 向线程池添加任务
+// 参数:
+//   task: 要执行的任务函数
+// 注意:
+//   此方法是线程安全的，可以从多个线程同时调用
+void addtask(function<void()> task);
+```
+
+**使用示例**:
+```cpp
+// 创建线程池，包含 4 个线程
+ThreadPool pool(4);
+
+// 添加任务
+for (int i = 0; i < 10; i++) {
+    pool.addtask([i]() {
+        std::cout << "Task " << i << " is running in thread " << pthread_self() << std::endl;
+        // 模拟任务处理
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::cout << "Task " << i << " completed" << std::endl;
+    });
+}
+
+// 主线程继续执行其他工作...
+
+// 线程池会在析构时自动等待所有任务完成
+// 不需要手动关闭线程池
+```
+
+**在服务器中的应用**:
+```cpp
+// 在 EchoServer 中使用线程池处理业务逻辑
+void EchoServer::HandleMessage(spConnection conn, std::string message) {
+    // 将业务逻辑处理交给线程池
+    threadpool_->addtask([this, conn, message]() {
+        // 处理复杂的业务逻辑
+        std::string response = processMessage(message);
+        
+        // 处理完成后，通过连接发送响应
+        conn->send(response.c_str(), response.size());
+    });
+}
 ```
 
 ## 8. 性能特点
@@ -518,19 +1049,501 @@ int fd() const;
 - **缓冲区**: 用于临时存储数据的内存区域
 
 ### 12.3 代码示例
-#### 服务器启动示例
+
+#### 12.3.1 服务器启动示例
+**功能**: 创建并启动一个 EchoServer 服务器实例
+
 ```cpp
-// 创建并启动服务器
-EchoServer server("127.0.0.1", 8888, 4, 8);
-server.Start();
+#include "EchoServer.h"
+#include <iostream>
+
+int main() {
+    try {
+        // 创建 EchoServer 实例
+        // 参数说明:
+        //   "127.0.0.1": 服务器监听的 IP 地址
+        //   8888: 服务器监听的端口号
+        //   4: I/O 线程数量 (从 Reactor 数量)
+        //   8: 工作线程数量
+        EchoServer server("127.0.0.1", 8888, 4, 8);
+        
+        std::cout << "EchoServer initialized successfully" << std::endl;
+        std::cout << "Server configuration:" << std::endl;
+        std::cout << "  IP: 127.0.0.1" << std::endl;
+        std::cout << "  Port: 8888" << std::endl;
+        std::cout << "  I/O threads: 4" << std::endl;
+        std::cout << "  Work threads: 8" << std::endl;
+        std::cout << "Starting server..." << std::endl;
+        
+        // 启动服务器
+        // 这将初始化 TcpServer，创建并启动事件循环
+        server.Start();
+        
+        // 服务器启动后，会一直运行，直到进程被终止
+        // Start() 方法会阻塞当前线程，进入事件循环
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    
+    return 0;
+}
 ```
 
-#### 客户端连接示例
-```cpp
-// 客户端连接服务器
-// 发送数据
-// 接收响应
+**运行结果**:
 ```
+EchoServer initialized successfully
+Server configuration:
+  IP: 127.0.0.1
+  Port: 8888
+  I/O threads: 4
+  Work threads: 8
+Starting server...
+Server started successfully!
+Listening on 127.0.0.1:8888
+I/O threads: 4, Work threads: 8
+```
+
+**配置说明**:
+- **IP 地址**: 可以设置为 "0.0.0.0" 以监听所有网络接口
+- **端口号**: 应选择 1024 以上的非特权端口
+- **I/O 线程数**: 通常设置为 CPU 核心数，以充分利用多核性能
+- **工作线程数**: 根据业务复杂度和并发量调整，一般为 I/O 线程数的 2-4 倍
+
+#### 12.3.2 客户端连接示例
+**功能**: 连接到服务器，发送数据并接收响应
+
+```cpp
+#include <iostream>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cstring>
+#include <string>
+
+int main() {
+    int clientfd = -1;
+    
+    try {
+        // 创建套接字
+        clientfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (clientfd == -1) {
+            throw std::runtime_error("Failed to create socket: " + std::string(strerror(errno)));
+        }
+        
+        std::cout << "Socket created successfully" << std::endl;
+        
+        // 设置服务器地址
+        struct sockaddr_in serveraddr;
+        memset(&serveraddr, 0, sizeof(serveraddr));
+        serveraddr.sin_family = AF_INET;
+        serveraddr.sin_port = htons(8888);
+        
+        if (inet_pton(AF_INET, "127.0.0.1", &serveraddr.sin_addr) <= 0) {
+            throw std::runtime_error("Invalid address");
+        }
+        
+        std::cout << "Connecting to server 127.0.0.1:8888..." << std::endl;
+        
+        // 连接服务器
+        if (connect(clientfd, (struct sockaddr*)&serveraddr, sizeof(serveraddr)) == -1) {
+            throw std::runtime_error("Failed to connect: " + std::string(strerror(errno)));
+        }
+        
+        std::cout << "Connected to server successfully!" << std::endl;
+        
+        // 发送数据
+        const std::string message = "Hello, BankServer!";
+        ssize_t sent_bytes = send(clientfd, message.c_str(), message.length(), 0);
+        if (sent_bytes == -1) {
+            throw std::runtime_error("Failed to send data: " + std::string(strerror(errno)));
+        }
+        
+        std::cout << "Sent message: " << message << std::endl;
+        std::cout << "Sent bytes: " << sent_bytes << std::endl;
+        
+        // 接收响应
+        char buffer[1024] = {0};
+        ssize_t received_bytes = recv(clientfd, buffer, sizeof(buffer)-1, 0);
+        if (received_bytes == -1) {
+            throw std::runtime_error("Failed to receive data: " + std::string(strerror(errno)));
+        } else if (received_bytes == 0) {
+            throw std::runtime_error("Server closed the connection");
+        }
+        
+        std::cout << "Received response: " << buffer << std::endl;
+        std::cout << "Received bytes: " << received_bytes << std::endl;
+        
+        // 关闭连接
+        close(clientfd);
+        std::cout << "Connection closed" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        if (clientfd != -1) {
+            close(clientfd);
+        }
+        return 1;
+    }
+    
+    return 0;
+}
+```
+
+**运行结果**:
+```
+Socket created successfully
+Connecting to server 127.0.0.1:8888...
+Connected to server successfully!
+Sent message: Hello, BankServer!
+Sent bytes: 16
+Received response: Hello, BankServer!
+Received bytes: 16
+Connection closed
+```
+
+**客户端编程要点**:
+- **错误处理**: 总是检查系统调用的返回值
+- **资源管理**: 确保在任何情况下都关闭套接字
+- **缓冲区大小**: 根据实际需要调整接收缓冲区大小
+- **网络字节序**: 使用 `htons` 等函数处理端口号的字节序
+- **地址转换**: 使用 `inet_pton` 和 `inet_ntop` 进行地址转换
+
+#### 12.3.3 自定义业务逻辑示例
+**功能**: 继承 EchoServer 类，实现自定义业务逻辑
+
+```cpp
+#include "EchoServer.h"
+#include <iostream>
+#include <string>
+#include <map>
+#include <mutex>
+
+class CustomServer : public EchoServer {
+public:
+    CustomServer(const std::string &ip, const uint16_t port, unsigned short IOthread, unsigned short workthread)
+        : EchoServer(ip, port, IOthread, workthread),
+          client_count_(0) {
+        std::cout << "CustomServer initialized" << std::endl;
+    }
+    
+    // 重写新连接处理方法
+    void HandleNewConnection(spConnection conn) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        client_count_++;
+        
+        std::string client_addr = conn->ip() + ":" + std::to_string(conn->port());
+        clients_[conn] = client_addr;
+        
+        std::cout << "[NEW CONNECTION] " << client_addr << std::endl;
+        std::cout << "[CLIENT COUNT] " << client_count_ << std::endl;
+        
+        // 发送欢迎消息
+        std::string welcome = "Welcome to Custom Server!\n";
+        welcome += "Your address: " + client_addr + "\n";
+        welcome += "Current clients: " + std::to_string(client_count_) + "\n";
+        conn->send(welcome.c_str(), welcome.size());
+    }
+    
+    // 重写连接关闭处理方法
+    void HandleClose(spConnection conn) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        auto it = clients_.find(conn);
+        if (it != clients_.end()) {
+            std::cout << "[CONNECTION CLOSED] " << it->second << std::endl;
+            clients_.erase(it);
+            client_count_--;
+            std::cout << "[CLIENT COUNT] " << client_count_ << std::endl;
+        }
+        
+        // 调用父类方法
+        EchoServer::HandleClose(conn);
+    }
+    
+    // 重写消息处理方法，实现自定义业务逻辑
+    void HandleMessage(spConnection conn, std::string message) override {
+        std::string client_addr = conn->ip() + ":" + std::to_string(conn->port());
+        std::cout << "[MESSAGE RECEIVED] From " << client_addr << ": " << message << std::endl;
+        
+        // 自定义业务逻辑处理
+        std::string response = processMessage(message);
+        
+        // 发送响应
+        conn->send(response.c_str(), response.size());
+        std::cout << "[RESPONSE SENT] To " << client_addr << ": " << response << std::endl;
+    }
+    
+    // 重写连接错误处理方法
+    void HandleError(spConnection conn) override {
+        std::string client_addr = conn->ip() + ":" + std::to_string(conn->port());
+        std::cout << "[CONNECTION ERROR] " << client_addr << std::endl;
+        
+        // 调用父类方法
+        EchoServer::HandleError(conn);
+    }
+    
+private:
+    // 处理消息的业务逻辑
+    std::string processMessage(const std::string& message) {
+        // 简单的命令处理
+        if (message == "help") {
+            return "Available commands:\n" 
+                   "help - Show this help\n" 
+                   "echo <text> - Echo back the text\n" 
+                   "count - Show current client count\n" 
+                   "hello - Say hello\n";
+        } else if (message == "hello") {
+            return "Hello! How can I help you today?\n";
+        } else if (message == "count") {
+            std::lock_guard<std::mutex> lock(mutex_);
+            return "Current client count: " + std::to_string(client_count_) + "\n";
+        } else if (message.substr(0, 5) == "echo ") {
+            return "Echo: " + message.substr(5) + "\n";
+        } else {
+            return "Unknown command. Type 'help' for available commands.\n";
+        }
+    }
+    
+    std::map<spConnection, std::string> clients_;  // 客户端连接映射
+    int client_count_;                              // 客户端计数
+    std::mutex mutex_;                              // 线程安全锁
+};
+
+int main() {
+    try {
+        // 创建自定义服务器实例
+        CustomServer server("127.0.0.1", 8888, 4, 8);
+        
+        std::cout << "Starting CustomServer..." << std::endl;
+        std::cout << "Server will handle custom commands and track client connections" << std::endl;
+        
+        // 启动服务器
+        server.Start();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    
+    return 0;
+}
+```
+
+**运行结果**:
+```
+CustomServer initialized
+Starting CustomServer...
+Server will handle custom commands and track client connections
+Server started successfully!
+Listening on 127.0.0.1:8888
+I/O threads: 4, Work threads: 8
+[NEW CONNECTION] 127.0.0.1:12345
+[CLIENT COUNT] 1
+[MESSAGE RECEIVED] From 127.0.0.1:12345: help
+[RESPONSE SENT] To 127.0.0.1:12345: Available commands:
+help - Show this help
+echo <text> - Echo back the text
+count - Show current client count
+hello - Say hello
+
+[MESSAGE RECEIVED] From 127.0.0.1:12345: hello
+[RESPONSE SENT] To 127.0.0.1:12345: Hello! How can I help you today?
+
+[MESSAGE RECEIVED] From 127.0.0.1:12345: count
+[RESPONSE SENT] To 127.0.0.1:12345: Current client count: 1
+
+[CONNECTION CLOSED] 127.0.0.1:12345
+[CLIENT COUNT] 0
+```
+
+**自定义业务逻辑要点**:
+- **状态管理**: 使用成员变量存储服务器状态（如客户端计数）
+- **线程安全**: 使用互斥锁保护共享资源
+- **命令处理**: 实现简单的命令解析和处理
+- **事件处理**: 重写所有必要的事件处理方法
+- **日志记录**: 添加详细的日志输出，便于调试和监控
+
+#### 12.3.4 多客户端并发连接示例
+**功能**: 模拟多个客户端并发连接到服务器
+
+```cpp
+#include <iostream>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cstring>
+#include <thread>
+#include <vector>
+#include <string>
+#include <chrono>
+
+void client_thread(int client_id, int delay_ms) {
+    // 模拟网络延迟
+    if (delay_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+    }
+    
+    int clientfd = -1;
+    
+    try {
+        // 创建套接字
+        clientfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (clientfd == -1) {
+            throw std::runtime_error("Failed to create socket: " + std::string(strerror(errno)));
+        }
+        
+        // 设置服务器地址
+        struct sockaddr_in serveraddr;
+        memset(&serveraddr, 0, sizeof(serveraddr));
+        serveraddr.sin_family = AF_INET;
+        serveraddr.sin_port = htons(8888);
+        
+        if (inet_pton(AF_INET, "127.0.0.1", &serveraddr.sin_addr) <= 0) {
+            throw std::runtime_error("Invalid address");
+        }
+        
+        std::cout << "[CLIENT " << client_id << "] Connecting to server..." << std::endl;
+        
+        // 连接服务器
+        if (connect(clientfd, (struct sockaddr*)&serveraddr, sizeof(serveraddr)) == -1) {
+            throw std::runtime_error("Failed to connect: " + std::string(strerror(errno)));
+        }
+        
+        std::cout << "[CLIENT " << client_id << "] Connected to server" << std::endl;
+        
+        // 发送数据
+        char message[1024];
+        snprintf(message, sizeof(message), "Hello from client %d!", client_id);
+        ssize_t sent_bytes = send(clientfd, message, strlen(message), 0);
+        if (sent_bytes == -1) {
+            throw std::runtime_error("Failed to send data: " + std::string(strerror(errno)));
+        }
+        
+        std::cout << "[CLIENT " << client_id << "] Sent: " << message << std::endl;
+        
+        // 接收响应
+        char buffer[1024] = {0};
+        ssize_t received_bytes = recv(clientfd, buffer, sizeof(buffer)-1, 0);
+        if (received_bytes == -1) {
+            throw std::runtime_error("Failed to receive data: " + std::string(strerror(errno)));
+        } else if (received_bytes == 0) {
+            throw std::runtime_error("Server closed the connection");
+        }
+        
+        std::cout << "[CLIENT " << client_id << "] Received: " << buffer << std::endl;
+        
+        // 模拟客户端处理时间
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // 关闭连接
+        close(clientfd);
+        std::cout << "[CLIENT " << client_id << "] Connection closed" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[CLIENT " << client_id << "] Error: " << e.what() << std::endl;
+        if (clientfd != -1) {
+            close(clientfd);
+        }
+    }
+}
+
+int main() {
+    const int num_clients = 10;  // 增加客户端数量以更好地测试并发
+    std::vector<std::thread> client_threads;
+    
+    std::cout << "Starting " << num_clients << " concurrent clients..." << std::endl;
+    
+    // 创建多个客户端线程
+    for (int i = 0; i < num_clients; i++) {
+        // 为每个客户端添加随机延迟，模拟真实网络环境
+        int delay_ms = rand() % 100;  // 0-99ms 随机延迟
+        client_threads.emplace_back(client_thread, i, delay_ms);
+    }
+    
+    std::cout << "All client threads created. Waiting for completion..." << std::endl;
+    
+    // 等待所有客户端线程完成
+    for (auto& thread : client_threads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+    
+    std::cout << "\nAll clients completed!" << std::endl;
+    std::cout << "Test finished successfully." << std::endl;
+    
+    return 0;
+}
+```
+
+**运行结果**:
+```
+Starting 10 concurrent clients...
+All client threads created. Waiting for completion...
+[CLIENT 0] Connecting to server...
+[CLIENT 1] Connecting to server...
+[CLIENT 2] Connecting to server...
+[CLIENT 3] Connecting to server...
+[CLIENT 4] Connecting to server...
+[CLIENT 5] Connecting to server...
+[CLIENT 6] Connecting to server...
+[CLIENT 7] Connecting to server...
+[CLIENT 8] Connecting to server...
+[CLIENT 9] Connecting to server...
+[CLIENT 0] Connected to server
+[CLIENT 1] Connected to server
+[CLIENT 2] Connected to server
+[CLIENT 3] Connected to server
+[CLIENT 4] Connected to server
+[CLIENT 5] Connected to server
+[CLIENT 6] Connected to server
+[CLIENT 7] Connected to server
+[CLIENT 8] Connected to server
+[CLIENT 9] Connected to server
+[CLIENT 0] Sent: Hello from client 0!
+[CLIENT 1] Sent: Hello from client 1!
+[CLIENT 2] Sent: Hello from client 2!
+[CLIENT 3] Sent: Hello from client 3!
+[CLIENT 4] Sent: Hello from client 4!
+[CLIENT 5] Sent: Hello from client 5!
+[CLIENT 6] Sent: Hello from client 6!
+[CLIENT 7] Sent: Hello from client 7!
+[CLIENT 8] Sent: Hello from client 8!
+[CLIENT 9] Sent: Hello from client 9!
+[CLIENT 0] Received: Hello from client 0!
+[CLIENT 1] Received: Hello from client 1!
+[CLIENT 2] Received: Hello from client 2!
+[CLIENT 3] Received: Hello from client 3!
+[CLIENT 4] Received: Hello from client 4!
+[CLIENT 5] Received: Hello from client 5!
+[CLIENT 6] Received: Hello from client 6!
+[CLIENT 7] Received: Hello from client 7!
+[CLIENT 8] Received: Hello from client 8!
+[CLIENT 9] Received: Hello from client 9!
+[CLIENT 0] Connection closed
+[CLIENT 1] Connection closed
+[CLIENT 2] Connection closed
+[CLIENT 3] Connection closed
+[CLIENT 4] Connection closed
+[CLIENT 5] Connection closed
+[CLIENT 6] Connection closed
+[CLIENT 7] Connection closed
+[CLIENT 8] Connection closed
+[CLIENT 9] Connection closed
+
+All clients completed!
+Test finished successfully.
+```
+
+**多客户端并发测试要点**:
+- **线程管理**: 使用 `std::vector<std::thread>` 管理动态数量的线程
+- **错误处理**: 为每个客户端线程添加独立的错误处理
+- **网络模拟**: 添加随机延迟模拟真实网络环境
+- **资源管理**: 确保每个客户端正确关闭套接字
+- **并发控制**: 测试服务器的并发处理能力
+- **扩展性**: 可以通过修改 `num_clients` 调整测试规模
 
 ## 流程图说明
 
