@@ -1210,25 +1210,14 @@ Connection closed
 - **网络字节序**: 使用 `htons` 等函数处理端口号的字节序
 - **地址转换**: 使用 `inet_pton` 和 `inet_ntop` 进行地址转换
 
-#### 12.3.3 自定义业务逻辑示例
-**功能**: 继承 EchoServer 类，实现自定义业务逻辑
 
-```cpp
-#include "EchoServer.h"
-#include <iostream>
-#include <string>
-#include <map>
-#include <mutex>
 
-class CustomServer : public EchoServer {
-public:
-    CustomServer(const std::string &ip, const uint16_t port, unsigned short IOthread, unsigned short workthread)
-        : EchoServer(ip, port, IOthread, workthread),
-          client_count_(0) {
-        std::cout << "CustomServer initialized" << std::endl;
-    }
+
+
+
+
     
-    // 重写新连接处理方法
+
     void HandleNewConnection(spConnection conn) override {
         std::lock_guard<std::mutex> lock(mutex_);
         client_count_++;
@@ -1545,18 +1534,6 @@ Test finished successfully.
 - **并发控制**: 测试服务器的并发处理能力
 - **扩展性**: 可以通过修改 `num_clients` 调整测试规模
 
-## 流程图说明
 
-本文档使用 Mermaid 语法创建了以下流程图，以帮助读者更直观地理解项目的架构和工作原理：
 
-1. **整体架构图**: 展示了各个模块之间的关系，包括 TcpServer、EchoServer、EventLoop、Connection、Epoll 和 ThreadPool 等核心组件。
 
-2. **服务器启动流程图**: 展示了服务器的启动流程，包括初始化、创建套接字、绑定端口、监听连接等步骤。
-
-3. **连接管理示意图**: 展示了连接的生命周期管理，包括新连接建立、数据收发、连接关闭等过程。
-
-4. **消息处理流程图**: 展示了客户端消息的处理流程，包括接收消息、解析消息、处理业务逻辑、发送响应等步骤。
-
-5. **事件循环流程图**: 展示了事件循环的工作流程，包括等待事件、处理事件、执行队列任务等步骤。
-
-这些流程图将帮助读者更直观地理解项目的架构和工作原理，提高文档的可读性和专业性。
