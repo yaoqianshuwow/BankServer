@@ -115,82 +115,6 @@ flowchart TD
 - **Epoll**: 底层 I/O 多路复用实现
 - **ThreadPool**: 线程池，处理并发任务
 
-### 3.3 主从 Reactor 模型设计
-主从 Reactor 模型是本项目的核心架构设计，通过分离连接接受和数据处理，实现了高效的并发处理能力。
-
-#### 3.3.1 模型架构
-```mermaid
-flowchart TD
-    subgraph 主Reactor
-        MainReactor[EventLoop\n主Reactor]
-        Acceptor[Acceptor\n连接接受]
-        MainEpoll[Epoll\n监听连接]
-    end
-    
-    subgraph 从Reactor
-        SubReactor1[EventLoop\n从Reactor 1]
-        SubReactor2[EventLoop\n从Reactor 2]
-        SubReactor3[EventLoop\n从Reactor N]
-        SubEpoll1[Epoll\nI/O事件监听]
-        SubEpoll2[Epoll\nI/O事件监听]
-        SubEpoll3[Epoll\nI/O事件监听]
-    end
-    
-    subgraph 连接管理
-        Connection1[Connection\n连接1]
-        Connection2[Connection\n连接2]
-        Connection3[Connection\n连接N]
-    end
-    
-    subgraph 业务处理
-        ThreadPool[ThreadPool\n工作线程池]
-        BusinessLogic[EchoServer\n业务逻辑]
-    end
-    
-    Client[客户端] --> MainEpoll
-    MainEpoll --> MainReactor
-    MainReactor --> Acceptor
-    Acceptor --> Connection1
-    Acceptor --> SubReactor1
-    Acceptor --> SubReactor2
-    Acceptor --> SubReactor3
-    
-    SubReactor1 --> SubEpoll1
-    SubReactor2 --> SubEpoll2
-    SubReactor3 --> SubEpoll3
-    
-    Connection1 --> SubEpoll1
-    Connection2 --> SubEpoll2
-    Connection3 --> SubEpoll3
-    
-    SubReactor1 --> Connection1
-    SubReactor2 --> Connection2
-    SubReactor3 --> Connection3
-    
-    Connection1 --> ThreadPool
-    Connection2 --> ThreadPool
-    Connection3 --> ThreadPool
-    
-    ThreadPool --> BusinessLogic
-    BusinessLogic --> Connection1
-```
-
-#### 3.3.2 工作流程
-1. **连接接受**：主 Reactor 通过 epoll 监听连接事件，当有新连接到来时，Acceptor 负责接受连接并创建对应的 Connection 对象。
-
-2. **负载均衡**：主 Reactor 采用轮询或其他负载均衡策略，将新创建的 Connection 对象分配给不同的从 Reactor。
-
-3. **事件处理**：从 Reactor 通过 Channel 管理 socket 事件，当连接上有数据可读/可写时，触发相应的事件回调。
-
-4. **业务处理**：从 Reactor 处理 I/O 事件，对于需要复杂业务逻辑处理的请求，将其交给工作线程池处理，避免阻塞 I/O 线程。
-
-5. **响应发送**：业务处理完成后，通过 Connection 对象将响应发送给客户端。
-
-#### 3.3.3 优势
-- **高并发处理**：多个从 Reactor 可以同时处理多个连接的事件，充分利用多核 CPU。
-- **负载均衡**：通过合理分配连接，实现简单有效的负载均衡。
-- **职责分离**：主 Reactor 专注于连接接受，从 Reactor 专注于事件处理，职责明确，代码结构清晰。
-- **弹性扩展**：可以根据系统负载动态调整从 Reactor 的数量，提高系统的可扩展性。
 
 ## 4. 核心功能模块
 
@@ -976,71 +900,54 @@ void EchoServer::HandleMessage(spConnection conn, std::string message) {
 - **多事件循环**: 分散 I/O 压力
 - **连接管理**: 高效管理大量连接
 
-## 9. 扩展与定制
 
-### 9.1 扩展业务逻辑
-- 继承 EchoServer 类
-- 重写回调方法
-- 实现自定义业务逻辑
+## 9 常见问题与解决方案
 
-### 9.2 定制服务器配置
-- 修改线程池大小
-- 调整事件循环参数
-- 优化缓冲区大小
-
-### 9.3 添加新功能
-- 支持 SSL/TLS 加密
-- 添加 HTTP 协议支持
-- 实现数据库连接池
-- 添加日志系统
-
-## 10. 常见问题与解决方案
-
-### 10.1 编译错误
+### 9.1 编译错误
 - **问题**: 缺少 pthread 库
   **解决方案**: 确保编译命令中包含 `-pthread` 选项
 
 - **问题**: C++ 标准版本不支持
   **解决方案**: 使用 `-std=c++11` 或更高标准编译
 
-### 10.2 运行错误
+### 9.2 运行错误
 - **问题**: 端口被占用
   **解决方案**: 修改服务器端口号
 
 - **问题**: 权限不足
   **解决方案**: 确保有足够权限绑定端口
 
-### 10.3 性能问题
+### 9.3 性能问题
 - **问题**: 连接数过多
   **解决方案**: 调整线程池大小和事件循环数量
 
 - **问题**: 内存占用高
   **解决方案**: 优化缓冲区大小，检查内存泄漏
 
-## 11. 总结与展望
+## 10 总结与展望
 
-### 11.1 项目总结
+### 10.1 项目总结
 - 实现了基于 epoll 的高性能 TCP 服务器
 - 采用多线程事件循环模型
 - 支持高并发连接处理
 - 代码结构清晰，模块化设计
 
-### 11.2 未来展望
+### 10.2 未来展望
 - 支持更多协议 (HTTP, WebSocket 等)
 - 添加监控和统计功能
 - 实现负载均衡
 - 支持分布式部署
 - 优化内存使用和性能
 
-## 12. 附录
+## 11. 附录
 
-### 12.1 参考资料
+### 11.1 参考资料
 - Linux Socket 编程
 - C++11 标准库
 - epoll 官方文档
 - 高性能服务器编程
 
-### 12.2 术语表
+### 11.2 术语表
 - **epoll**: Linux 下的 I/O 多路复用机制
 - **事件循环**: 处理 I/O 事件的循环
 - **非阻塞 I/O**: 不会阻塞线程的 I/O 操作
@@ -1048,9 +955,9 @@ void EchoServer::HandleMessage(spConnection conn, std::string message) {
 - **函数对象**: 可调用的对象，如 lambda 表达式
 - **缓冲区**: 用于临时存储数据的内存区域
 
-### 12.3 代码示例
+### 11.3 代码示例
 
-#### 12.3.1 服务器启动示例
+#### 11.3.1 服务器启动示例
 **功能**: 创建并启动一个 EchoServer 服务器实例
 
 ```cpp
@@ -1111,7 +1018,7 @@ I/O threads: 4, Work threads: 8
 - **I/O 线程数**: 通常设置为 CPU 核心数，以充分利用多核性能
 - **工作线程数**: 根据业务复杂度和并发量调整，一般为 I/O 线程数的 2-4 倍
 
-#### 12.3.2 客户端连接示例
+#### 11.3.2 客户端连接示例
 **功能**: 连接到服务器，发送数据并接收响应
 
 ```cpp
